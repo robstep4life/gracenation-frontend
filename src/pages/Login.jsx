@@ -1,41 +1,61 @@
-import { useState, useContext } from "react";
-import { AuthContext } from "../context/AuthContext";
-import axios from "axios";
+import { useState } from "react";
+import API from "../services/api";
 
 export default function Login() {
-  const { login } = useContext(AuthContext);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
-    const res = await axios.post("http://localhost:8080/api/auth/login", {
-      username,
-      password,
-    });
+    try {
+      const response = await API.post("/auth/login", {
+        username,
+        password,
+      });
 
-    login(res.data.token);
+      const token = response.data.token;
+
+      localStorage.setItem("token", token);
+
+      alert("Login Successful");
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.log("Login error:", error);
+      console.log("Server response:", error.response);
+      alert(error.response?.data?.message || "Login Failed");
+    }
   };
 
   return (
-    <div>
-      <h2>Login</h2>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="logo login-logo">
+          GRACE NATION CHURCH INTERNATIONAL AKA LIBERATION CITY
+        </div>
 
-      <form onSubmit={handleSubmit}>
-        <input
-          placeholder="username"
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <h2>Church Admin Login</h2>
 
-        <input
-          type="password"
-          placeholder="password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <form onSubmit={handleLogin} className="login-form">
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
 
-        <button type="submit">Login</button>
-      </form>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+
+          <button type="submit">Login</button>
+        </form>
+      </div>
     </div>
   );
 }
