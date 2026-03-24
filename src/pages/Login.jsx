@@ -1,5 +1,5 @@
 import { useState } from "react";
-import API from "../services/api";
+import API, { extractAuthToken } from "../services/api";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -14,16 +14,27 @@ export default function Login() {
         password,
       });
 
-      const token = response.data.token;
+      const token = extractAuthToken(response.data, response.headers);
 
-      localStorage.setItem("token", token);
+      if (token) {
+        localStorage.setItem("token", token);
+        localStorage.removeItem("session_auth");
+      } else {
+        localStorage.setItem("session_auth", "true");
+      }
 
       alert("Login Successful");
       window.location.href = "/dashboard";
     } catch (error) {
       console.log("Login error:", error);
       console.log("Server response:", error.response);
-      alert(error.response?.data?.message || "Login Failed");
+
+      if (error.response?.status === 404) {
+        alert("Login endpoint not found (404). Confirm backend URL/path.");
+        return;
+      }
+
+      alert(error.response?.data?.message || error.message || "Login Failed");
     }
   };
 

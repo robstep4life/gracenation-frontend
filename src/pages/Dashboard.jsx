@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import API from "../services/api";
+import API, { getStoredToken, hasSessionAuth } from "../services/api";
 
 const defaultEvents = [
   { name: "Community Outreach", date: "April 14", venue: "City Center" },
@@ -41,8 +41,23 @@ const defaultAnnouncements = [
   },
 ];
 
+const defaultOverview = {
+  welcome: "Welcome back",
+  title: "GRACE NATION CHURCH INTERNATIONAL",
+  text: "Manage church activities, events, services, announcements, and media uploads from one place.",
+};
+
+const galleryCategories = [
+  "Service",
+  "Church Life",
+  "Miracles",
+  "Ministry",
+  "Celebration",
+];
+
 export default function Dashboard() {
   const token = localStorage.getItem("token");
+  const isAuthenticated = Boolean(token) || hasSessionAuth();
 
   const [events, setEvents] = useState(() => {
     const saved = localStorage.getItem("church_events");
@@ -60,7 +75,40 @@ export default function Dashboard() {
   });
 
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(galleryCategories[0]);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [overview, setOverview] = useState(() => {
+    const saved = localStorage.getItem("church_overview");
+    return saved ? JSON.parse(saved) : defaultOverview;
+  });
+
+  const saveImageLocally = () =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        try {
+          const savedGallery = JSON.parse(localStorage.getItem("church_gallery_images") || "[]");
+          const updatedGallery = [
+            {
+              title: selectedImage.name,
+              image: reader.result,
+              category: selectedCategory,
+              createdAt: Date.now(),
+            },
+            ...savedGallery,
+          ].slice(0, 30);
+
+          localStorage.setItem("church_gallery_images", JSON.stringify(updatedGallery));
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = () => reject(new Error("Could not read image file"));
+      reader.readAsDataURL(selectedImage);
+    });
 
   useEffect(() => {
     localStorage.setItem("church_events", JSON.stringify(events));
@@ -74,12 +122,17 @@ export default function Dashboard() {
     localStorage.setItem("church_announcements", JSON.stringify(announcements));
   }, [announcements]);
 
-  if (!token) {
+  useEffect(() => {
+    localStorage.setItem("church_overview", JSON.stringify(overview));
+  }, [overview]);
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("session_auth");
     window.location.href = "/login";
   };
 
@@ -118,38 +171,104 @@ export default function Dashboard() {
     setAnnouncements((prev) => [...prev, { title, text }]);
   };
 
+  const handleEditOverview = () => {
+    const welcome = window.prompt("Enter overview welcome text:", overview.welcome);
+    if (!welcome) return;
+
+    const title = window.prompt("Enter overview heading:", overview.title);
+    if (!title) return;
+
+    const text = window.prompt("Enter overview description:", overview.text);
+    if (!text) return;
+
+    setOverview({ welcome, title, text });
+  };
+
   const handleImageUpload = async () => {
     if (!selectedImage) {
       alert("Please select an image first.");
       return;
     }
 
-    const savedToken = localStorage.getItem("token");
-
-    if (!savedToken) {
+    if (!getStoredToken() && !hasSessionAuth()) {
       alert("You are not logged in.");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", selectedImage);
+    const uploadVariants = [
+      { url: "/images/upload", field: "file" },
+      { url: "/images/upload", field: "image" },
+      { url: "/upload", field: "file" },
+      { url: "/upload", field: "image" },
+    ];
 
     try {
       setUploadMessage("Uploading...");
 
-      await API.post("/images/upload", formData, {
-        headers: {
-          Authorization: `Bearer ${savedToken}`,
-        },
-      });
+      let uploaded = false;
+      let lastError = null;
+
+      for (const variant of uploadVariants) {
+        const formData = new FormData();
+        formData.append(variant.field, selectedImage);
+
+        try {
+          await API.post(variant.url, formData);
+          uploaded = true;
+          break;
+        } catch (err) {
+          lastError = err;
+
+          const status = err.response?.status;
+          const message = err.response?.data?.message || "";
+
+          const isFieldMismatch =
+            status === 400 &&
+            /unexpected field|field/i.test(String(message));
+
+          if (status === 404 || isFieldMismatch) {
+            continue;
+          }
+
+          throw err;
+        }
+      }
+
+      if (!uploaded) {
+        await saveImageLocally();
+        setUploadMessage("Image saved locally (backend upload unavailable)");
+        alert("Image saved locally and will appear in Gallery.");
+        setSelectedImage(null);
+        setSelectedCategory(galleryCategories[0]);
+        return;
+      }
 
       setUploadMessage("Image uploaded successfully");
       alert("Image uploaded successfully");
       setSelectedImage(null);
+      setSelectedCategory(galleryCategories[0]);
     } catch (error) {
       console.error("Upload error:", error);
       console.log("Server response:", error.response);
       setUploadMessage("Upload failed");
+
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("session_auth");
+        alert("Your session expired. Please login again.");
+        window.location.href = "/login";
+        return;
+      }
+
+      if (error.response?.status === 403) {
+        await saveImageLocally();
+        setUploadMessage("Image saved locally (no upload permission on server)");
+        alert("No upload permission on server (403). Saved locally instead.");
+        setSelectedImage(null);
+        setSelectedCategory(galleryCategories[0]);
+        return;
+      }
+
       alert(error.response?.data?.message || "Image upload failed");
     }
   };
@@ -183,15 +302,20 @@ export default function Dashboard() {
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div>
-            <p className="dashboard-welcome">Welcome back</p>
-            <h1>GRACE NATION CHURCH INTERNATIONAL</h1>
-            <p className="dashboard-header-text">
-              Manage church activities, events, services, announcements, and media uploads from one place.
-            </p>
+            <p className="dashboard-welcome">{overview.welcome}</p>
+            <h1>{overview.title}</h1>
+            <p className="dashboard-header-text">{overview.text}</p>
           </div>
         </header>
 
         <section className="dashboard-cards" id="overview">
+          <div className="section-top" style={{ marginBottom: "18px" }}>
+            <h2>Overview</h2>
+            <button className="action-btn" onClick={handleEditOverview}>
+              Post Overview
+            </button>
+          </div>
+
           <div className="dashboard-card">
             <h3>Upcoming Events</h3>
             <p>{events.length}</p>
@@ -290,8 +414,29 @@ export default function Dashboard() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) => setSelectedImage(e.target.files[0])}
+                onChange={(e) => setSelectedImage(e.target.files?.[0] || null)}
               />
+
+              <div style={{ marginTop: "10px" }}>
+                <label htmlFor="gallery-category">Category:</label>{" "}
+                <select
+                  id="gallery-category"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                >
+                  {galleryCategories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedImage && (
+                <p style={{ marginTop: "8px" }}>
+                  Selected file: <strong>{selectedImage.name}</strong>
+                </p>
+              )}
 
               <br />
               <br />

@@ -42,6 +42,18 @@ const defaultEvents = [
   { name: "Worship & Prayer Night", date: "April 27", place: "Sanctuary" },
 ];
 
+const defaultOverview = {
+  welcome: "Welcome Home",
+  title: "A place to grow in faith, find family, and serve with purpose.",
+  text: "Join us this Sunday and experience heartfelt worship, practical biblical teaching, and a loving church community for every age.",
+};
+
+const defaultAnnouncements = [
+  { title: "Workers Meeting", text: "All department heads should meet after Sunday service." },
+  { title: "Fasting & Prayer", text: "Three-day fasting and prayer starts next Monday." },
+  { title: "Youth Rally", text: "Youth rally rehearsal begins this Friday evening." },
+];
+
 function HomePage() {
   const serviceTimes =
     JSON.parse(localStorage.getItem("church_services")) || defaultServiceTimes;
@@ -54,6 +66,11 @@ function HomePage() {
   }));
 
   const displayEvents = events.length ? events : defaultEvents;
+
+  const overview = JSON.parse(localStorage.getItem("church_overview")) || defaultOverview;
+  const announcements =
+    JSON.parse(localStorage.getItem("church_announcements")) || defaultAnnouncements;
+  const uploadedImages = JSON.parse(localStorage.getItem("church_gallery_images")) || [];
 
   return (
     <div className="site">
@@ -68,6 +85,8 @@ function HomePage() {
             <a href="#services">Services</a>
             <a href="#ministries">Ministries</a>
             <a href="#events">Events</a>
+            <a href="#announcements">Announcements</a>
+            <a href="#media">Media Uploads</a>
             <Link to="/gallery">Gallery</Link>
             <Link to="/login" className="btn btn-small">
               Login
@@ -76,13 +95,10 @@ function HomePage() {
         </nav>
 
         <div className="hero-content container">
-          <p className="eyebrow">Welcome Home</p>
-          <h1>A place to grow in faith, find family, and serve with purpose.</h1>
+          <p className="eyebrow">{overview.welcome}</p>
+          <h1>{overview.title}</h1>
 
-          <p>
-            Join us this Sunday and experience heartfelt worship, practical
-            biblical teaching, and a loving church community for every age.
-          </p>
+          <p>{overview.text}</p>
 
           <div className="hero-actions">
             <a className="btn" href="#services">
@@ -146,6 +162,37 @@ function HomePage() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="section container" id="announcements">
+          <h2>Latest Announcements</h2>
+          <div className="grid three">
+            {announcements.map((announcement, index) => (
+              <article key={`${announcement.title}-${index}`} className="card">
+                <h3>{announcement.title}</h3>
+                <p>{announcement.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section muted" id="media">
+          <div className="container">
+            <h2>Latest Media Uploads</h2>
+            {uploadedImages.length ? (
+              <div className="grid three">
+                {uploadedImages.slice(0, 3).map((item, index) => (
+                  <article key={`${item.title}-${index}`} className="card">
+                    <img src={item.image} alt={item.title} style={{ width: "100%", borderRadius: "12px" }} />
+                    <h3 style={{ marginTop: "12px" }}>{item.title}</h3>
+                    <p>{item.category}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p>No media uploads yet. Use Admin Dashboard &gt; Media Upload.</p>
+            )}
           </div>
         </section>
       </main>
