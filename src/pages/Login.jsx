@@ -41,10 +41,6 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="logo login-logo">
-          GRACE NATION CHURCH INTERNATIONAL AKA LIBERATION CITY
-        </div>
-
         <h2>Church Admin Login</h2>
 
         <form onSubmit={handleLogin} className="login-form">

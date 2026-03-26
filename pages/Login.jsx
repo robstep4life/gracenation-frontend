@@ -1,69 +1,72 @@
-import { useState, useContext } from "react";
-import API from "../services/api"; // <-- corrected path
-import { AuthContext } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import API, { extractAuthToken } from "../services/api";
 
-function Login() {
+export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const { login } = useContext(AuthContext);
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
     try {
-      const res = await API.post("/auth/login", {
+      const response = await API.post("/auth/login", {
         username,
         password,
       });
 
-      const token =
-        res.data?.token ||
-        res.data?.jwt ||
-        res.data?.accessToken;
+      const token = extractAuthToken(response.data, response.headers);
 
-      if (!token) {
-        alert("Login response did not include a token.");
-        console.log("Login response payload:", res.data);
+      if (token) {
+        localStorage.setItem("token", token);
+        localStorage.removeItem("session_auth");
+      } else {
+        localStorage.setItem("session_auth", "true");
+      }
+
+      alert("Login Successful");
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.log("Login error:", error);
+      console.log("Server response:", error.response);
+
+      if (error.response?.status === 404) {
+        alert("Login endpoint not found (404). Confirm backend URL/path.");
         return;
       }
 
-      login(token); // stores token in AuthContext + localStorage
-      navigate("/dashboard");
-    } catch (err) {
-      console.log("Login error:", err);
-      console.log("Server response:", err.response);
-      alert(err.response?.data?.message || "Login failed");
+      alert(error.response?.data?.message || error.message || "Login Failed");
     }
   };
 
   return (
-    <div>
-      <h2>Admin Login</h2>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-logo">
+          GRACE NATION CHURCH INTERNATIONAL AKA LIBERATION CITY
+        </div>
 
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
+        <h2>Church Admin Login</h2>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <form onSubmit={handleLogin} className="login-form">
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
 
-        <button type="submit">Login</button>
-      </form>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+
+          <button type="submit">Login</button>
+        </form>
+      </div>
     </div>
   );
 }
-
-export default Login;
